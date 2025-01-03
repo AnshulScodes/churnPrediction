@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ChurnTracker Example</title>
+    <script src="churn-tracker.js"></script>
+</head>
+<body>
+    <script>
+        // Initialize tracker
+        const tracker = new ChurnTracker('http://localhost:5000', {
+            autoTrackSessions: true,
+            autoTrackEngagement: true
+        });
+
+        // Example usage
+        async function initializeUser() {
+            try {
+                await tracker.initUser('user@example.com', 'pro');
+                console.log('User initialized');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Track feature usage
+        async function useFeature(featureName) {
+            try {
+                await tracker.trackFeatureUsage(featureName);
+                console.log('Feature usage tracked');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Track support ticket
+        async function openSupportTicket() {
+            try {
+                await tracker.trackSupport(true, false);
+                console.log('Support ticket tracked');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Initialize when page loads
+        initializeUser();
+    </script>
+
+    <!-- Example buttons -->
+    <button onclick="useFeature('search')">Use Search Feature</button>
+    <button onclick="openSupportTicket()">Open Support Ticket</button>
+</body>
+</html> 

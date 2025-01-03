@@ -1,111 +1,168 @@
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-from models import db, UserEvent
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-import posthog
+from supabase import create_client
 import logging
 import os
-import requests
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, Any
+from flask_cors import CORS
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__, static_folder='../frontend')
+# Initialize Flask and Supabase
+app = Flask(__name__)
 CORS(app)
+supabase = create_client(
+    os.getenv('SUPABASE_URL'),
+    os.getenv('SUPABASE_KEY')
+)
 
-# Config
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY')
+def log_api_call(endpoint: str, data: Dict[str, Any], result: Dict[str, Any]) -> None:
+    """Log API call details"""
+    logger.info(f"""
+    API Call:
+    Endpoint: {endpoint}
+    Input Data: {data}
+    Result: {result}
+    """)
 
-# Initialize PostHog
-posthog.api_key = os.getenv('POSTHOG_API_KEY')
-posthog.host = os.getenv('POSTHOG_HOST')
-
-db.init_app(app)
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-with app.app_context():
-    db.create_all()
-
-@app.route('/')
-def serve_frontend():
-    return send_from_directory(app.static_folder, 'index.html')
-
-@app.route('/<path:path>')
-def serve_static(path):
-    return send_from_directory(app.static_folder, path)
-
-@app.route('/config')
-def get_config():
-    return jsonify({
-        'posthog_api_key': os.getenv('POSTHOG_API_KEY'),
-        'posthog_host': os.getenv('POSTHOG_HOST')
-    })
-
-@app.route('/stats/<user_id>')
-def get_stats(user_id):
+@app.route('/track/user', methods=['POST'])
+def track_user():
+    """Track new or existing user"""
     try:
-        api_key = os.getenv('POSTHOG_API_KEY')
-        if not api_key:
-            return jsonify({'error': 'No API key found in environment'}), 500
-        if not api_key.startswith('phx_'):
-            return jsonify({'error': 'Invalid API key format - must start with phx_'}), 500
-            
-        host = os.getenv('POSTHOG_HOST', 'https://app.posthog.com').rstrip('/')
-        
-        headers = {
-            'Authorization': f'Bearer {api_key}'
-        }
-        
-        person_url = f'{host}/api/projects/@current/events'
-        params = {
-            'distinct_id': user_id,
-            'limit': 100
-        }
-        
-        logger.info(f"Request details:")
-        logger.info(f"URL: {person_url}")
-        logger.info(f"API Key prefix: {api_key[:6]}...")
-        logger.info(f"Headers: {headers}")
-        
-        response = requests.get(
-            person_url, 
-            headers=headers,
-            params=params
-        )
-        
-        if response.status_code == 200:
-            events_data = response.json()
-            stats = {
-                'pageviews': len([e for e in events_data.get('results', []) if e['event'] == '$pageview']),
-                'clicks': len([e for e in events_data.get('results', []) if e['event'] == '$autocapture']),
-                'total_events': len(events_data.get('results', [])),
-                'recent_events': events_data.get('results', [])[:5]
-            }
-            return jsonify(stats)
-        else:
-            return jsonify({
-                'error': f"PostHog API error: {response.status_code}",
-                'details': response.text,
-                'request_url': person_url,
-                'key_prefix': api_key[:6],
-                'key_length': len(api_key)
-            }), 500
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        data = request.json
+        email = data.get('email')
+        plan_type = data.get('plan_type', 'free')
+        status = data.get('status', 'active')
 
-@app.route('/debug-key')
-def debug_key():
-    api_key = os.getenv('POSTHOG_API_KEY')
-    return jsonify({
-        'key_starts_with': api_key[:6] if api_key else 'None',
-        'key_length': len(api_key) if api_key else 0,
-        'is_project_key': api_key.startswith('phx_') if api_key else False
-    })
+        logger.info(f"Tracking user: {email} with plan: {plan_type}, status: {status}")
+
+        # Check if user exists
+        response = supabase.table('users').select('user_id').eq('email', email).execute()
+        
+        if response.data:
+            user_id = response.data[0]['user_id']
+            result = supabase.table('users').update({
+                'plan_type': plan_type,
+                'status': status,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('user_id', user_id).execute()
+            logger.info(f"Updated existing user: {user_id}")
+        else:
+            user_id = str(uuid.uuid4())
+            result = supabase.table('users').insert({
+                'user_id': user_id,
+                'email': email,
+                'plan_type': plan_type,
+                'status': status,
+                'sign_up_date': datetime.now(timezone.utc).isoformat()
+            }).execute()
+            logger.info(f"Created new user: {user_id}")
+
+        response_data = {'success': True, 'user_id': user_id}
+        log_api_call('/track/user', data, response_data)
+        return jsonify(response_data)
+
+    except Exception as e:
+        error_msg = f"Error tracking user: {str(e)}"
+        logger.error(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/track/metrics', methods=['POST'])
+def track_metrics():
+    """Track all types of metrics in one call"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        metric_type = data.get('type')
+        metrics = data.get('metrics', {})
+
+        logger.info(f"Tracking {metric_type} metrics for user: {user_id}")
+        logger.info(f"Metric data: {metrics}")
+
+        if not user_id or not metric_type:
+            return jsonify({
+                'success': False,
+                'error': 'user_id and type are required'
+            }), 400
+
+        # Map metric types to table names
+        table_map = {
+            'engagement': 'engagement_metrics',
+            'subscription': 'subscription_metrics',
+            'support': 'support_metrics',
+            'communication': 'communication_metrics',
+            'behavioral': 'behavioral_metrics'
+        }
+
+        if metric_type not in table_map:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid metric type. Must be one of: {", ".join(table_map.keys())}'
+            }), 400
+
+        # Add timestamps
+        metrics.update({
+            'user_id': user_id,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        })
+
+        # Update metrics in appropriate table
+        result = supabase.table(table_map[metric_type])\
+            .upsert(metrics, on_conflict='user_id')\
+            .execute()
+
+        response_data = {'success': True, 'updated': metric_type}
+        log_api_call('/track/metrics', data, response_data)
+        return jsonify(response_data)
+
+    except Exception as e:
+        error_msg = f"Error tracking metrics: {str(e)}"
+        logger.error(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/get/metrics/<user_id>', methods=['GET'])
+def get_metrics(user_id):
+    """Get all metrics for a user"""
+    try:
+        logger.info(f"Fetching metrics for user: {user_id}")
+
+        # Get all metrics from all tables
+        tables = [
+            'users',
+            'engagement_metrics',
+            'subscription_metrics',
+            'support_metrics',
+            'communication_metrics',
+            'behavioral_metrics'
+        ]
+
+        metrics = {}
+        for table in tables:
+            response = supabase.table(table)\
+                .select('*')\
+                .eq('user_id', user_id)\
+                .execute()
+            metrics[table] = response.data[0] if response.data else None
+            logger.info(f"Retrieved {table} data: {metrics[table]}")
+
+        response_data = {'success': True, 'metrics': metrics}
+        log_api_call(f'/get/metrics/{user_id}', {}, response_data)
+        return jsonify(response_data)
+
+    except Exception as e:
+        error_msg = f"Error getting metrics: {str(e)}"
+        logger.error(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
