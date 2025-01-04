@@ -79,21 +79,19 @@ def track_user():
 
 @app.route('/track/metrics', methods=['POST'])
 def track_metrics():
-    """Track all types of metrics in one call"""
+    """Track various metrics"""
     try:
         data = request.json
         user_id = data.get('user_id')
         metric_type = data.get('type')
         metrics = data.get('metrics', {})
 
-        logger.info(f"Tracking {metric_type} metrics for user: {user_id}")
-        logger.info(f"Metric data: {metrics}")
-
-        if not user_id or not metric_type:
-            return jsonify({
-                'success': False,
-                'error': 'user_id and type are required'
-            }), 400
+        logger.info(f"""
+        Tracking metrics:
+        User ID: {user_id}
+        Type: {metric_type}
+        Metrics: {metrics}
+        """)
 
         # Map metric types to table names
         table_map = {
@@ -105,10 +103,9 @@ def track_metrics():
         }
 
         if metric_type not in table_map:
-            return jsonify({
-                'success': False,
-                'error': f'Invalid metric type. Must be one of: {", ".join(table_map.keys())}'
-            }), 400
+            error_msg = f'Invalid metric type. Must be one of: {", ".join(table_map.keys())}'
+            logger.error(error_msg)
+            return jsonify({'success': False, 'error': error_msg}), 400
 
         # Add timestamps
         metrics.update({
@@ -116,10 +113,18 @@ def track_metrics():
             'updated_at': datetime.now(timezone.utc).isoformat()
         })
 
+        logger.info(f"Attempting to upsert into table: {table_map[metric_type]}")
+        logger.info(f"Upsert data: {metrics}")
+
         # Update metrics in appropriate table
-        result = supabase.table(table_map[metric_type])\
-            .upsert(metrics, on_conflict='user_id')\
-            .execute()
+        try:
+            result = supabase.table(table_map[metric_type])\
+                .upsert(metrics)\
+                .execute()
+            logger.info(f"Upsert result: {result}")
+        except Exception as e:
+            logger.error(f"Supabase error: {str(e)}")
+            raise
 
         response_data = {'success': True, 'updated': metric_type}
         log_api_call('/track/metrics', data, response_data)
