@@ -33,68 +33,82 @@ class ChurnTracker {
         }
     }
 
-    // Track engagement metrics
-    async trackEngagement(metrics = {}) {
+    // Track feature usage with proper structure
+    async trackFeatureUsage(featureName) {
         if (!this.userId) throw new Error('User not initialized');
-        
-        const sessionDuration = (Date.now() - this.sessionStartTime) / 1000 / 60; // in minutes
-        
-        return this.trackMetrics('engagement', {
-            last_active_date: new Date().toISOString(),
-            average_session_duration: sessionDuration,
-            ...metrics
-        });
-    }
+        console.log(`Tracking feature usage: ${featureName}`); // Debug log
 
-    // Track subscription events
-    async trackSubscription(status, cancellationAttempted = false) {
-        return this.trackMetrics('subscription', {
-            billing_status: status,
-            cancellation_attempt: cancellationAttempted
-        });
-    }
-
-    // Track support interactions
-    async trackSupport(ticketOpened = false, ticketClosed = false, resolutionTime = null) {
-        return this.trackMetrics('support', {
-            open_tickets: ticketOpened ? 1 : (ticketClosed ? -1 : 0),
-            average_ticket_resolution_time: resolutionTime
-        });
-    }
-
-    // Track communication events
-    async trackCommunication(emailOpened = false, notificationClicked = false) {
-        return this.trackMetrics('communication', {
-            email_open_rate: emailOpened ? 1 : 0,
-            notification_click_rate: notificationClicked ? 1 : 0
-        });
-    }
-
-    // Track behavioral patterns
-    async trackBehavior(onboardingCompleted = false, usageDecline = null) {
-        return this.trackMetrics('behavioral', {
-            onboarding_completion: onboardingCompleted,
-            usage_decline: usageDecline
-        });
-    }
-
-    // Generic metric tracking
-    async trackMetrics(type, metrics) {
-        if (!this.userId) throw new Error('User not initialized');
-        
         try {
             const response = await fetch(`${this.apiUrl}/track/metrics`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: this.userId,
-                    type,
-                    metrics
+                    type: 'engagement',
+                    metrics: {
+                        feature_name: featureName
+                    }
                 })
             });
-            return await response.json();
+            const data = await response.json();
+            console.log('Feature tracking response:', data); // Debug log
+            return data;
         } catch (error) {
-            console.error(`Error tracking ${type} metrics:`, error);
+            console.error('Error tracking feature:', error);
+            throw error;
+        }
+    }
+
+    // Track page visits
+    async trackPageVisit(pageName, timeSpent = 0) {
+        if (!this.userId) throw new Error('User not initialized');
+        console.log(`Tracking page visit: ${pageName}`); // Debug log
+
+        try {
+            const response = await fetch(`${this.apiUrl}/track/metrics`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: this.userId,
+                    type: 'behavioral',
+                    metrics: {
+                        page_visited: pageName,
+                        time_spent: timeSpent
+                    }
+                })
+            });
+            const data = await response.json();
+            console.log('Page tracking response:', data); // Debug log
+            return data;
+        } catch (error) {
+            console.error('Error tracking page visit:', error);
+            throw error;
+        }
+    }
+
+    // Track subscription changes
+    async trackSubscription(planType, billingStatus = 'active') {
+        if (!this.userId) throw new Error('User not initialized');
+        console.log(`Tracking subscription: ${planType}`); // Debug log
+
+        try {
+            const response = await fetch(`${this.apiUrl}/track/metrics`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: this.userId,
+                    type: 'subscription',
+                    metrics: {
+                        plan_type: planType,
+                        billing_status: billingStatus
+                    }
+                })
+            });
+            const data = await response.json();
+            console.log('Subscription tracking response:', data); // Debug log
+            return data;
+        } catch (error) {
+            console.error('Error tracking subscription:', error);
             throw error;
         }
     }
@@ -103,25 +117,21 @@ class ChurnTracker {
     startSessionTracking() {
         if (this.sessionInterval) return;
 
+        // Track initial page load
+        this.trackPageVisit('initial_load', 0);
+
         // Update session duration every minute
         this.sessionInterval = setInterval(() => {
-            this.trackEngagement({
-                login_frequency: 1,
-                feature_usage_frequency: 1
-            });
+            const timeSpent = Math.floor((Date.now() - this.lastActiveTime) / 1000);
+            this.trackPageVisit('session_active', timeSpent);
+            this.lastActiveTime = Date.now();
         }, 60000); // every minute
 
         // Track when user leaves
         window.addEventListener('beforeunload', () => {
-            this.trackEngagement();
+            const timeSpent = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+            this.trackPageVisit('session_end', timeSpent);
             clearInterval(this.sessionInterval);
-        });
-    }
-
-    // Feature usage tracking
-    async trackFeatureUsage(featureName) {
-        return this.trackEngagement({
-            feature_usage_frequency: 1
         });
     }
 } 

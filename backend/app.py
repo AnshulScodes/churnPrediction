@@ -37,40 +37,65 @@ def log_api_call(endpoint: str, data: Dict[str, Any], result: Dict[str, Any]) ->
 
 @app.route('/track/user', methods=['POST'])
 def track_user():
-    """Track new or existing user"""
+    """Track new or existing user with proper data validation"""
     try:
         data = request.json
         email = data.get('email')
         plan_type = data.get('plan_type', 'free')
         status = data.get('status', 'active')
 
-        logger.info(f"Tracking user: {email} with plan: {plan_type}, status: {status}")
+        if not email:
+            raise ValueError("Email is required")
+
+        logger.info(f"""
+        Tracking user:
+        Email: {email}
+        Plan: {plan_type}
+        Status: {status}
+        """)
 
         # Check if user exists
-        response = supabase.table('users').select('user_id').eq('email', email).execute()
+        response = supabase.table('users')\
+            .select('user_id')\
+            .eq('email', email)\
+            .execute()
+        
+        current_time = datetime.now(timezone.utc).isoformat()
         
         if response.data:
             user_id = response.data[0]['user_id']
-            result = supabase.table('users').update({
-                'plan_type': plan_type,
-                'status': status,
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }).eq('user_id', user_id).execute()
+            result = supabase.table('users')\
+                .update({
+                    'plan_type': plan_type,
+                    'status': status,
+                    'updated_at': current_time
+                })\
+                .eq('user_id', user_id)\
+                .execute()
             logger.info(f"Updated existing user: {user_id}")
         else:
             user_id = str(uuid.uuid4())
-            result = supabase.table('users').insert({
-                'user_id': user_id,
-                'email': email,
-                'plan_type': plan_type,
-                'status': status,
-                'sign_up_date': datetime.now(timezone.utc).isoformat()
-            }).execute()
+            result = supabase.table('users')\
+                .insert({
+                    'user_id': user_id,
+                    'email': email,
+                    'plan_type': plan_type,
+                    'status': status,
+                    'sign_up_date': current_time,
+                    'created_at': current_time,
+                    'updated_at': current_time
+                })\
+                .execute()
             logger.info(f"Created new user: {user_id}")
 
         response_data = {'success': True, 'user_id': user_id}
-        log_api_call('/track/user', data, response_data)
+        logger.info(f"Successfully tracked user: {response_data}")
         return jsonify(response_data)
+
+    except ValueError as ve:
+        error_msg = str(ve)
+        logger.error(f"Validation error: {error_msg}")
+        return jsonify({'success': False, 'error': error_msg}), 400
 
     except Exception as e:
         error_msg = f"Error tracking user: {str(e)}"
@@ -79,59 +104,113 @@ def track_user():
 
 @app.route('/track/metrics', methods=['POST'])
 def track_metrics():
-    """Track various metrics"""
     try:
         data = request.json
         user_id = data.get('user_id')
-        metric_type = data.get('type')
-        metrics = data.get('metrics', {})
+        feature_name = data.get('metrics', {}).get('feature_name')
+        current_time = datetime.now(timezone.utc)
 
-        logger.info(f"""
-        Tracking metrics:
-        User ID: {user_id}
-        Type: {metric_type}
-        Metrics: {metrics}
-        """)
+        logger.info(f"Tracking feature usage: {feature_name} for user: {user_id}")
 
-        # Map metric types to table names
-        table_map = {
-            'engagement': 'engagement_metrics',
-            'subscription': 'subscription_metrics',
-            'support': 'support_metrics',
-            'communication': 'communication_metrics',
-            'behavioral': 'behavioral_metrics'
-        }
-
-        if metric_type not in table_map:
-            error_msg = f'Invalid metric type. Must be one of: {", ".join(table_map.keys())}'
-            logger.error(error_msg)
-            return jsonify({'success': False, 'error': error_msg}), 400
-
-        # Add timestamps
-        metrics.update({
-            'user_id': user_id,
-            'updated_at': datetime.now(timezone.utc).isoformat()
-        })
-
-        logger.info(f"Attempting to upsert into table: {table_map[metric_type]}")
-        logger.info(f"Upsert data: {metrics}")
-
-        # Update metrics in appropriate table
+        # Update engagement_metrics
         try:
-            result = supabase.table(table_map[metric_type])\
-                .upsert(metrics)\
+            # Check if entry exists
+            existing = supabase.table('engagement_metrics')\
+                .select('*')\
+                .eq('user_id', user_id)\
+                .eq('features_used', feature_name)\
                 .execute()
-            logger.info(f"Upsert result: {result}")
+
+            if existing.data:
+                # Update existing record
+                result = supabase.table('engagement_metrics')\
+                    .update({
+                        'usage_count': existing.data[0]['usage_count'] + 1,
+                        'last_used_at': current_time.isoformat(),
+                        'updated_at': current_time.isoformat()
+                    })\
+                    .eq('user_id', user_id)\
+                    .eq('features_used', feature_name)\
+                    .execute()
+            else:
+                # Create new record
+                result = supabase.table('engagement_metrics')\
+                    .insert({
+                        'user_id': user_id,
+                        'features_used': feature_name,
+                        'usage_count': 1,
+                        'first_used_at': current_time.isoformat(),
+                        'last_used_at': current_time.isoformat()
+                    })\
+                    .execute()
+
+            # Update feature_analytics
+            hour = current_time.hour
+            day = current_time.strftime('%a').lower()
+            
+            # Get time of day
+            if 5 <= hour < 12:
+                time_of_day = 'morning'
+            elif 12 <= hour < 17:
+                time_of_day = 'afternoon'
+            elif 17 <= hour < 22:
+                time_of_day = 'evening'
+            else:
+                time_of_day = 'night'
+
+            # Get existing feature analytics
+            feature_data = supabase.table('feature_analytics')\
+                .select('*')\
+                .eq('feature_name', feature_name)\
+                .execute()
+
+            if feature_data.data:
+                current = feature_data.data[0]
+                peak_usage = current['peak_usage_times']
+                daily_usage = current['usage_by_day']
+                
+                # Update counts
+                peak_usage[time_of_day] += 1
+                daily_usage[day] += 1
+
+                result = supabase.table('feature_analytics')\
+                    .update({
+                        'total_usage_count': current['total_usage_count'] + 1,
+                        'peak_usage_times': peak_usage,
+                        'usage_by_day': daily_usage,
+                        'updated_at': current_time.isoformat()
+                    })\
+                    .eq('feature_name', feature_name)\
+                    .execute()
+            else:
+                # Initialize new feature tracking
+                peak_usage = {'morning': 0, 'afternoon': 0, 'evening': 0, 'night': 0}
+                daily_usage = {'mon': 0, 'tue': 0, 'wed': 0, 'thu': 0, 'fri': 0, 'sat': 0, 'sun': 0}
+                
+                peak_usage[time_of_day] = 1
+                daily_usage[day] = 1
+
+                result = supabase.table('feature_analytics')\
+                    .insert({
+                        'feature_name': feature_name,
+                        'total_usage_count': 1,
+                        'unique_users_count': 1,
+                        'peak_usage_times': peak_usage,
+                        'usage_by_day': daily_usage
+                    })\
+                    .execute()
+
+            return jsonify({
+                'success': True,
+                'message': f"Tracked usage of {feature_name}"
+            })
+
         except Exception as e:
-            logger.error(f"Supabase error: {str(e)}")
+            logger.error(f"Error tracking metrics: {str(e)}")
             raise
 
-        response_data = {'success': True, 'updated': metric_type}
-        log_api_call('/track/metrics', data, response_data)
-        return jsonify(response_data)
-
     except Exception as e:
-        error_msg = f"Error tracking metrics: {str(e)}"
+        error_msg = f"Error in track_metrics: {str(e)}"
         logger.error(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
@@ -168,6 +247,98 @@ def get_metrics(user_id):
         error_msg = f"Error getting metrics: {str(e)}"
         logger.error(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
+
+def update_behavioral_metrics(user_id, feature_name):
+    """Update behavioral metrics based on user activity"""
+    try:
+        current_time = datetime.now(timezone.utc)
+        
+        # Get existing behavioral data
+        existing = supabase.table('behavioral_metrics')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .execute()
+
+        # Get user's feature usage history
+        feature_usage = supabase.table('engagement_metrics')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .execute()
+
+        # Calculate metrics
+        unique_features = set([f['feature_name'] for f in feature_usage.data])
+        total_features = len(unique_features)
+        
+        # Define core features
+        core_features = {'search', 'export', 'reports', 'analytics'}
+        core_features_used = list(unique_features.intersection(core_features))
+
+        if existing.data:
+            record = existing.data[0]
+            last_seen = datetime.fromisoformat(record['last_seen_date'].replace('Z', '+00:00'))
+            days_since_last = (current_time - last_seen).days
+            
+            # Calculate usage trend (-1 to 1)
+            if days_since_last == 0:
+                usage_trend = min(record['usage_trend'] + 0.1, 1.0)
+            else:
+                usage_trend = max(record['usage_trend'] - (0.1 * days_since_last), -1.0)
+
+            # Calculate risk score (0 to 1)
+            risk_factors = [
+                days_since_last > 7,  # Inactive for a week
+                len(core_features_used) < 2,  # Using less than 2 core features
+                usage_trend < 0,  # Declining usage
+                record['average_session_duration'] < 60  # Short sessions
+            ]
+            churn_risk = sum(risk_factors) / len(risk_factors)
+
+            # Calculate engagement score (0 to 1)
+            engagement_factors = [
+                len(core_features_used) / len(core_features),  # Core feature usage
+                min(record['daily_active_days'] / 30, 1.0),  # Monthly activity
+                max(usage_trend, 0),  # Positive usage trend
+                min(record['average_session_duration'] / 300, 1.0)  # Session duration (max 5 min)
+            ]
+            engagement_score = sum(engagement_factors) / len(engagement_factors)
+
+            # Update record
+            result = supabase.table('behavioral_metrics')\
+                .update({
+                    'daily_active_days': record['daily_active_days'] + 1,
+                    'weekly_active_days': min(record['weekly_active_days'] + 1, 7),
+                    'features_used': total_features,
+                    'core_features_used': core_features_used,
+                    'usage_trend': usage_trend,
+                    'inactive_days': 0,
+                    'last_seen_date': current_time.isoformat(),
+                    'churn_risk_score': churn_risk,
+                    'engagement_score': engagement_score,
+                    'updated_at': current_time.isoformat()
+                })\
+                .eq('user_id', user_id)\
+                .execute()
+        else:
+            # Create new record
+            result = supabase.table('behavioral_metrics')\
+                .insert({
+                    'user_id': user_id,
+                    'daily_active_days': 1,
+                    'weekly_active_days': 1,
+                    'features_used': total_features,
+                    'core_features_used': core_features_used,
+                    'last_seen_date': current_time.isoformat(),
+                    'churn_risk_score': 0.75,  # High initial risk for new users
+                    'engagement_score': 0.25  # Low initial engagement for new users
+                })\
+                .execute()
+
+        logger.info(f"Updated behavioral metrics for user {user_id}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error updating behavioral metrics: {str(e)}")
+        return False
 
 if __name__ == '__main__':
     app.run(debug=True)

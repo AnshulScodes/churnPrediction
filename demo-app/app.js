@@ -60,8 +60,9 @@ async function useFeature(featureName) {
     if (!currentUser) return;
 
     try {
+        console.log(`Using feature: ${featureName}`); // Debug log
         await tracker.trackFeatureUsage(featureName);
-        console.log(`Feature ${featureName} used`);
+        console.log(`Feature ${featureName} tracked successfully`);
         refreshStats();
     } catch (error) {
         console.error(`Error using feature ${featureName}:`, error);
@@ -73,8 +74,9 @@ async function openSupportTicket() {
     if (!currentUser) return;
 
     try {
-        await tracker.trackSupport(true, false);
-        console.log('Support ticket opened');
+        console.log('Opening support ticket'); // Debug log
+        await tracker.trackFeatureUsage('support_ticket_open');
+        console.log('Support ticket tracked');
         refreshStats();
     } catch (error) {
         console.error('Error opening support ticket:', error);
@@ -98,8 +100,9 @@ async function handleNotificationClick() {
     if (!currentUser) return;
 
     try {
-        await tracker.trackCommunication(false, true);
-        console.log('Notification clicked');
+        console.log('Clicking notification'); // Debug log
+        await tracker.trackFeatureUsage('notification_click');
+        console.log('Notification click tracked');
         refreshStats();
     } catch (error) {
         console.error('Error tracking notification click:', error);
@@ -110,8 +113,9 @@ async function handleEmailOpen() {
     if (!currentUser) return;
 
     try {
-        await tracker.trackCommunication(true, false);
-        console.log('Email opened');
+        console.log('Opening email'); // Debug log
+        await tracker.trackFeatureUsage('email_open');
+        console.log('Email open tracked');
         refreshStats();
     } catch (error) {
         console.error('Error tracking email open:', error);
