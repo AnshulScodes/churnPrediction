@@ -12,8 +12,8 @@ async function testSDK() {
 
         // Initialize user
         const userId = await tracker.initUser({
-            email: 'test@example.com',
-            planType: 'pro'
+            email: 'brrr@skibidi.com',
+            planType: 'free'
         });
         console.log('User initialized:', userId);
 
