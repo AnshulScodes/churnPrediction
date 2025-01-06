@@ -11,6 +11,7 @@ from flask_cors import CORS
 from functools import wraps
 import secrets
 from serverless_wsgi import handle_request
+from index import app
 
 # Configure logging
 logging.basicConfig(
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Initialize Flask and Supabase
-app = Flask(__name__)
+# app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 supabase: Client = create_client(
     os.environ.get("SUPABASE_URL"),
