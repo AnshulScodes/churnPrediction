@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from supabase import create_client
+from supabase import create_client, Client
 import logging
 import os
 import uuid
@@ -22,10 +22,10 @@ load_dotenv()
 
 # Initialize Flask and Supabase
 app = Flask(__name__)
-CORS(app)
-supabase = create_client(
-    os.getenv('SUPABASE_URL'),
-    os.getenv('SUPABASE_KEY')
+CORS(app, resources={r"/*": {"origins": "*"}})
+supabase: Client = create_client(
+    os.environ.get("SUPABASE_URL"),
+    os.environ.get("SUPABASE_KEY")
 )
 
 # Store API keys (in production, use a database)
@@ -376,5 +376,10 @@ def update_behavioral_metrics(user_id, feature_name):
         logger.error(f"Error updating behavioral metrics: {str(e)}")
         return False
 
+@app.route('/')
+def home():
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
+
+# For Vercel, we need this
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
