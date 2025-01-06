@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any
 from flask_cors import CORS
+from functools import wraps
+import secrets
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +28,38 @@ supabase = create_client(
     os.getenv('SUPABASE_KEY')
 )
 
+# Store API keys (in production, use a database)
+API_KEYS = {}
+
+def generate_api_key():
+    """Generate a new API key"""
+    return secrets.token_urlsafe(32)
+
+@app.route('/generate-api-key', methods=['POST'])
+def create_api_key():
+    """Create a new API key for a client"""
+    api_key = generate_api_key()
+    API_KEYS[api_key] = {
+        'created_at': datetime.now(timezone.utc),
+        'active': True
+    }
+    return jsonify({
+        'api_key': api_key,
+        'message': 'Store this API key securely. It won\'t be shown again.'
+    })
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('Authorization')
+        if api_key:
+            api_key = api_key.replace('Bearer ', '')
+        
+        if not api_key or api_key not in API_KEYS:
+            return jsonify({'error': 'Invalid API key'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 def log_api_call(endpoint: str, data: Dict[str, Any], result: Dict[str, Any]) -> None:
     """Log API call details"""
     logger.info(f"""
@@ -36,6 +70,7 @@ def log_api_call(endpoint: str, data: Dict[str, Any], result: Dict[str, Any]) ->
     """)
 
 @app.route('/track/user', methods=['POST'])
+@require_api_key
 def track_user():
     """Track new or existing user with proper data validation"""
     try:
@@ -103,6 +138,7 @@ def track_user():
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/track/metrics', methods=['POST'])
+@require_api_key
 def track_metrics():
     try:
         data = request.json
