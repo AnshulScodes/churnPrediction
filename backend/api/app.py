@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from typing import TypeVar, ClassVar
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import logging
@@ -9,6 +10,7 @@ from typing import Dict, Any
 from flask_cors import CORS
 from functools import wraps
 import secrets
+from serverless_wsgi import handle_request
 
 # Configure logging
 logging.basicConfig(
@@ -378,7 +380,15 @@ def update_behavioral_metrics(user_id, feature_name):
 
 @app.route('/')
 def home():
-    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "supabase_connected": supabase is not None
+    })
+
+# Handler for Vercel
+def handler(event, context):
+    return handle_request(app, event, context)
 
 # For Vercel, we need this
 if __name__ == '__main__':

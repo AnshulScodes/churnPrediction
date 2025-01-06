@@ -9,7 +9,7 @@ class ChurnTracker {
         console.log('Initializing ChurnTracker...', { config });
         if (!config.apiKey) throw new Error('API key is required');
         this.apiKey = config.apiKey;
-        this.apiUrl = config.apiUrl || 'http://localhost:5000';
+        this.apiUrl = config.apiUrl || 'https://churn-prediction-nine.vercel.app/';
     }
 
     async initUser(userData: UserData): Promise<string> {
