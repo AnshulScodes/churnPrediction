@@ -1,23 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ChurnTracker = void 0;
 class ChurnTracker {
     constructor(config) {
         this.userId = null;
         console.log('Initializing ChurnTracker...', { config });
-        if (!config.apiKey)
-            throw new Error('API key is required');
-        this.apiKey = config.apiKey;
-        this.apiUrl = config.apiUrl || 'http://localhost:5000';
+        this.apiUrl = config.apiUrl || 'https://flask-hello-world-i02qp96fs-anshulscodes-projects.vercel.app';
+        this.apiKey = config.apiKey || '';
+    }
+    getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
+        };
     }
     async initUser(userData) {
         console.log('Initializing user...', { userData });
         try {
             const response = await fetch(`${this.apiUrl}/track/user`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers: this.getHeaders(),
                 body: JSON.stringify(userData)
             });
             const data = await response.json();
@@ -41,10 +43,7 @@ class ChurnTracker {
         try {
             const response = await fetch(`${this.apiUrl}/track/metrics`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers: this.getHeaders(),
                 body: JSON.stringify({
                     user_id: this.userId,
                     type: 'engagement',
@@ -63,5 +62,26 @@ class ChurnTracker {
             throw error;
         }
     }
+    async updateUserStatus(status) {
+        if (!this.userId)
+            throw new Error('User not initialized');
+        try {
+            const response = await fetch(`${this.apiUrl}/track/user/status`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    user_id: this.userId,
+                    status: status
+                })
+            });
+            const data = await response.json();
+            if (!data.success)
+                throw new Error(data.error);
+        }
+        catch (error) {
+            console.error('Failed to update user status:', error);
+            throw error;
+        }
+    }
 }
-module.exports = { ChurnTracker };
+exports.ChurnTracker = ChurnTracker;

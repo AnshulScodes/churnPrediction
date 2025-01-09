@@ -1,15 +1,22 @@
-import { UserData, TrackerConfig } from './types';
+import { TrackerConfig, UserData } from './types';
 
-class ChurnTracker {
-    private apiKey: string;
+export class ChurnTracker {
+    private userId: string | null;
     private apiUrl: string;
-    private userId: string | null = null;
+    private apiKey: string;
 
     constructor(config: TrackerConfig) {
+        this.userId = null;
         console.log('Initializing ChurnTracker...', { config });
-        if (!config.apiKey) throw new Error('API key is required');
-        this.apiKey = config.apiKey;
-        this.apiUrl = config.apiUrl || 'https://churn-prediction-nine.vercel.app/';
+        this.apiUrl = config.apiUrl || 'https://flask-hello-world-i02qp96fs-anshulscodes-projects.vercel.app';
+        this.apiKey = config.apiKey || '';
+    }
+
+    private getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
+        };
     }
 
     async initUser(userData: UserData): Promise<string> {
@@ -17,16 +24,11 @@ class ChurnTracker {
         try {
             const response = await fetch(`${this.apiUrl}/track/user`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers: this.getHeaders(),
                 body: JSON.stringify(userData)
             });
-
             const data = await response.json();
             console.log('User initialization response:', data);
-
             if (!data.success) throw new Error(data.error);
             if (!data.user_id) throw new Error('No user ID returned from server');
             
@@ -45,10 +47,7 @@ class ChurnTracker {
         try {
             const response = await fetch(`${this.apiUrl}/track/metrics`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers: this.getHeaders(),
                 body: JSON.stringify({
                     user_id: this.userId,
                     type: 'engagement',
@@ -57,16 +56,32 @@ class ChurnTracker {
                     }
                 })
             });
-
             const data = await response.json();
             console.log('Feature tracking response:', data);
-
             if (!data.success) throw new Error(data.error);
         } catch (error) {
             console.error('Failed to track feature usage:', error);
             throw error;
         }
     }
-}
 
-module.exports = { ChurnTracker };
+    async updateUserStatus(status: 'active' | 'inactive'): Promise<void> {
+        if (!this.userId) throw new Error('User not initialized');
+
+        try {
+            const response = await fetch(`${this.apiUrl}/track/user/status`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    user_id: this.userId,
+                    status: status
+                })
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
+        } catch (error) {
+            console.error('Failed to update user status:', error);
+            throw error;
+        }
+    }
+}

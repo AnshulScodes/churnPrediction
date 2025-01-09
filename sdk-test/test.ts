@@ -4,7 +4,7 @@ async function testSDK() {
     try {
         // Initialize tracker
         const tracker = new ChurnTracker({
-            apiKey: '',  // Replace this with your actual API key
+            apiKey: '',  // Add your API key here
             apiUrl: 'http://localhost:5000'
         });
 
