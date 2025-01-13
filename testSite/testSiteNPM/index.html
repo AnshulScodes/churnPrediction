@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Churn Tracker Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background: white;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        #output {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Churn Tracker SDK Demo</h1>
+
+        <div class="card">
+            <h3>1. User Management</h3>
+            <button onclick="initUser()">Initialize New User</button>
+            <button onclick="updateStatus('inactive')">Set Inactive</button>
+            <button onclick="updateStatus('active')">Set Active</button>
+        </div>
+
+        <div class="card">
+            <h3>2. Feature Tracking</h3>
+            <button onclick="trackFeature('dashboard_view')">Track Dashboard View</button>
+            <button onclick="trackFeature('profile_edit')">Track Profile Edit</button>
+            <button onclick="trackFeature('settings_change')">Track Settings</button>
+        </div>
+
+        <div class="card">
+            <h3>3. Session Management</h3>
+            <button onclick="startNewSession()">Start Session</button>
+            <button onclick="endCurrentSession()">End Session</button>
+        </div>
+
+        <div class="card">
+            <h3>4. Page Visits</h3>
+            <button onclick="trackPage('home')">Visit Home</button>
+            <button onclick="trackPage('profile')">Visit Profile</button>
+            <button onclick="trackPage('settings')">Visit Settings</button>
+        </div>
+
+        <div class="card">
+            <h3>Events Log</h3>
+            <pre id="output">// Events will appear here...</pre>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ChurnTracker } from 'churn-tracker-sdk';
+
+        // Initialize the tracker with your API key
+        window.tracker = new ChurnTracker({
+            apiKey: 'r0ATgJZptfqX5TGhUziMD9GsbsfNZBWNL1DvLKdoVmc',
+            apiUrl: 'http://localhost:3000'
+        });
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toISOString();
+            const className = type === 'error' ? 'error' : 'success';
+            output.innerHTML = `<span class="${className}">[${timestamp}] ${message}</span>\n` + output.innerHTML;
+        }
+
+        // User Management
+        window.initUser = async () => {
+            try {
+                const email = `user${Date.now()}@example.com`;
+                const userId = await tracker.initUser({
+                    email: email,
+                    planType: 'free'
+                });
+                log(`User initialized: ${email} (ID: ${userId})`);
+            } catch (error) {
+                log(error.message, 'error');
+            }
+        };
+
+        window.updateStatus = async (status) => {
+            try {
+                await tracker.updateUserStatus(status);
+                log(`User status updated to: ${status}`);
+            } catch (error) {
+                log(error.message, 'error');
+            }
+        };
+
+        // Feature Tracking
+        window.trackFeature = async (featureName) => {
+            try {
+                await tracker.trackFeatureUsage(featureName, {
+                    timestamp: new Date().toISOString(),
+                    context: 'demo'
+                });
+                log(`Feature tracked: ${featureName}`);
+            } catch (error) {
+                log(error.message, 'error');
+            }
+        };
+
+        // Session Management
+        window.startNewSession = () => {
+            tracker.startSession();
+            log('Session started');
+        };
+
+        window.endCurrentSession = async () => {
+            try {
+                await tracker.endSession('demo_page');
+                log('Session ended');
+            } catch (error) {
+                log(error.message, 'error');
+            }
+        };
+
+        // Page Tracking
+        window.trackPage = async (pageName) => {
+            try {
+                await tracker.trackPageVisit(pageName);
+                log(`Page visit tracked: ${pageName}`);
+            } catch (error) {
+                log(error.message, 'error');
+            }
+        };
+    </script>
+</body>
+</html>
