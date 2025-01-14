@@ -36,14 +36,23 @@
     </style>
 </head>
 <body>
+    <form action="">
+        <input type="text" id="email" placeholder="Email" />
+        <select id="planType">
+            <option value="free">Free</option>
+            <option value="pro">Pro</option>
+            <option value="enterprise">Enterprise</option>
+        </select>
+    </form>
     <div class="container">
         <h1>Churn Tracker SDK Demo</h1>
 
         <div class="card">
             <h3>1. User Management</h3>
-            <button onclick="initUser()">Initialize New User</button>
+            <button onclick="initUser(document.getElementById('email').value, document.getElementById('planType').value)">Initialize New User</button>
             <button onclick="updateStatus('inactive')">Set Inactive</button>
             <button onclick="updateStatus('active')">Set Active</button>
+            <button onclick="updateStatus('')">Set Churned</button>
         </div>
 
         <div class="card">
@@ -51,6 +60,7 @@
             <button onclick="trackFeature('dashboard_view')">Track Dashboard View</button>
             <button onclick="trackFeature('profile_edit')">Track Profile Edit</button>
             <button onclick="trackFeature('settings_change')">Track Settings</button>
+            <button onclick="trackFeature('cook_with_kaiya')">Cook with Kaiya</button>
         </div>
 
         <div class="card">
@@ -85,20 +95,25 @@
             const output = document.getElementById('output');
             const timestamp = new Date().toISOString();
             const className = type === 'error' ? 'error' : 'success';
-            output.innerHTML = `<span class="${className}">[${timestamp}] ${message}</span>\n` + output.innerHTML;
+            const logMessage = `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            console.log(`[Frontend] ${message}`);  // Console logging
+            output.innerHTML = logMessage + output.innerHTML;
         }
-
         // User Management
-        window.initUser = async () => {
+        window.initUser = async (email, planType) => {
+            log(`Attempting to initialize user - Email: ${email}, Plan: ${planType}`);
+            
             try {
-                const email = `user${Date.now()}@example.com`;
+                log('Calling SDK initUser...');
                 const userId = await tracker.initUser({
                     email: email,
-                    planType: 'free'
+                    planType: planType
                 });
-                log(`User initialized: ${email} (ID: ${userId})`);
+                log(`SDK returned user ID: ${userId}`);
+                log(`User successfully initialized: ${email} (ID: ${userId})`);
             } catch (error) {
-                log(error.message, 'error');
+                log(`Failed to initialize user: ${error.message}`, 'error');
+                console.error('[Frontend] Detailed error:', error);
             }
         };
 
@@ -114,7 +129,7 @@
         // Feature Tracking
         window.trackFeature = async (featureName) => {
             try {
-                await tracker.trackFeatureUsage(featureName, {
+                await tracker.trackFeature(featureName, {
                     timestamp: new Date().toISOString(),
                     context: 'demo'
                 });
@@ -148,6 +163,14 @@
                 log(error.message, 'error');
             }
         };
+
+        // Prevent form submission from refreshing page
+        document.querySelector('form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const planType = document.getElementById('planType').value;
+            initUser(email, planType);
+        });
     </script>
 </body>
 </html>

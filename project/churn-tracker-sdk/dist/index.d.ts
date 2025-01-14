@@ -3,28 +3,35 @@ export interface UserData {
     planType: 'free' | 'pro' | 'enterprise';
     status?: 'active' | 'inactive';
 }
-export interface SessionData {
-    duration: number;
-    lastActivePage?: string;
+export interface FeatureData {
+    feature_name: string;
+    user_id: string;
 }
-export interface MetricsData {
-    featureName: string;
-    metadata?: Record<string, any>;
+export interface SessionData {
+    user_id: string;
+    duration: number;
+    last_active_page?: string;
 }
 export declare class ChurnTracker {
     private userId;
+    private userEmail;
+    private planType;
     private apiUrl;
     private apiKey;
-    private sessionStartTime;
+    private sessionStart;
     constructor(config: {
         apiUrl?: string;
         apiKey: string;
     });
+    private log;
     private makeRequest;
     initUser(userData: UserData): Promise<string>;
-    trackFeatureUsage(featureName: string, metadata?: Record<string, any>): Promise<void>;
-    startSession(): void;
-    endSession(lastActivePage?: string): Promise<void>;
     updateUserStatus(status: 'active' | 'inactive'): Promise<void>;
-    trackPageVisit(pageName: string): Promise<void>;
+    trackFeature(featureName: string): Promise<void>;
+    trackSession(duration: number): Promise<void>;
+    startSession(): void;
+    endSession(): Promise<void>;
+    getUserId(): string | null;
+    isInitialized(): boolean;
 }
+export default ChurnTracker;

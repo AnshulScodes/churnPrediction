@@ -13,90 +13,123 @@ exports.ChurnTracker = void 0;
 class ChurnTracker {
     constructor(config) {
         this.userId = null;
+        this.userEmail = null;
+        this.planType = null;
+        this.sessionStart = null;
         this.apiUrl = config.apiUrl || 'http://localhost:3000';
         this.apiKey = config.apiKey;
-        this.sessionStartTime = null;
+    }
+    log(message, data) {
+        console.log(`[ChurnTracker SDK] ${message}`, data || '');
     }
     makeRequest(endpoint, data) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield fetch(`${this.apiUrl}${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) {
-                const error = yield response.json();
-                throw new Error(error.error || 'Request failed');
+            this.log(`Making request to ${endpoint}`, data);
+            try {
+                const response = yield fetch(`${this.apiUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.apiKey}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                this.log(`Response status: ${response.status}`);
+                const responseData = yield response.json();
+                this.log(`Response data:`, responseData);
+                if (!response.ok) {
+                    throw new Error(responseData.error || 'Request failed');
+                }
+                return responseData;
             }
-            return response.json();
+            catch (error) {
+                this.log(`Request failed:`, error);
+                throw error;
+            }
         });
     }
     initUser(userData) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.makeRequest('/track/user', userData);
-            if (response.success) {
-                this.userId = response.user_id;
-                this.startSession();
-                return response.user_id;
+            this.log('Initializing user with data:', userData);
+            try {
+                const response = yield this.makeRequest('/track/user', {
+                    email: userData.email,
+                    planType: userData.planType,
+                    status: userData.status || 'active'
+                });
+                this.log('User initialization response:', response);
+                if (response.success && response.user_id) {
+                    this.userId = response.user_id;
+                    this.userEmail = userData.email;
+                    this.planType = userData.planType;
+                    this.log('User successfully initialized', {
+                        userId: this.userId,
+                        email: this.userEmail,
+                        planType: this.planType
+                    });
+                    return response.user_id;
+                }
+                throw new Error('Failed to initialize user');
             }
-            throw new Error('Failed to initialize user');
-        });
-    }
-    trackFeatureUsage(featureName, metadata) {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.userId) {
-                throw new Error('User not initialized! Call initUser first');
+            catch (error) {
+                this.log('Error initializing user:', error);
+                throw error;
             }
-            yield this.makeRequest('/track/feature', {
-                user_id: this.userId,
-                feature_name: featureName,
-                metadata
-            });
-        });
-    }
-    startSession() {
-        this.sessionStartTime = Date.now();
-    }
-    endSession(lastActivePage) {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (!this.userId || !this.sessionStartTime) {
-                return;
-            }
-            const duration = Math.floor((Date.now() - this.sessionStartTime) / 1000);
-            yield this.makeRequest('/track/session', {
-                user_id: this.userId,
-                duration,
-                last_active_page: lastActivePage
-            });
-            this.sessionStartTime = null;
         });
     }
     updateUserStatus(status) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!this.userId) {
-                throw new Error('User not initialized! Call initUser first');
+            if (!this.userId || !this.userEmail || !this.planType) {
+                throw new Error('User not initialized');
             }
             yield this.makeRequest('/track/user', {
-                user_id: this.userId,
-                status
+                email: this.userEmail,
+                planType: this.planType,
+                status: status,
+                user_id: this.userId
             });
         });
     }
-    // Helper method to track page visits
-    trackPageVisit(pageName) {
+    trackFeature(featureName) {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this.userId) {
-                throw new Error('User not initialized! Call initUser first');
+                throw new Error('User not initialized');
             }
-            yield this.trackFeatureUsage(`page_visit_${pageName}`, {
-                type: 'page_visit',
-                page: pageName,
-                timestamp: new Date().toISOString()
+            yield this.makeRequest('/track/feature', {
+                user_id: this.userId,
+                feature_name: featureName
             });
         });
+    }
+    trackSession(duration) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.userId) {
+                throw new Error('User not initialized');
+            }
+            yield this.makeRequest('/track/session', {
+                user_id: this.userId,
+                duration: duration
+            });
+        });
+    }
+    startSession() {
+        this.sessionStart = Date.now();
+    }
+    endSession() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.sessionStart || !this.userId)
+                return;
+            const duration = Math.floor((Date.now() - this.sessionStart) / 1000);
+            yield this.trackSession(duration);
+            this.sessionStart = null;
+        });
+    }
+    getUserId() {
+        return this.userId;
+    }
+    isInitialized() {
+        return Boolean(this.userId && this.userEmail && this.planType);
     }
 }
 exports.ChurnTracker = ChurnTracker;
+exports.default = ChurnTracker;

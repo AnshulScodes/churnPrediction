@@ -4,109 +4,146 @@ export interface UserData {
     status?: 'active' | 'inactive';
 }
 
-export interface SessionData {
-    duration: number;
-    lastActivePage?: string;
+export interface FeatureData {
+    feature_name: string;
+    user_id: string;
 }
 
-export interface MetricsData {
-    featureName: string;
-    metadata?: Record<string, any>;
+export interface SessionData {
+    user_id: string;
+    duration: number;
+    last_active_page?: string;
 }
 
 export class ChurnTracker {
-    private userId: string | null;
+    private userId: string | null = null;
+    private userEmail: string | null = null;
+    private planType: string | null = null;
     private apiUrl: string;
     private apiKey: string;
-    private sessionStartTime: number | null;
+    private sessionStart: number | null = null;
 
     constructor(config: { apiUrl?: string; apiKey: string }) {
-        this.userId = null;
         this.apiUrl = config.apiUrl || 'http://localhost:3000';
         this.apiKey = config.apiKey;
-        this.sessionStartTime = null;
+    }
+
+    private log(message: string, data?: any) {
+        console.log(`[ChurnTracker SDK] ${message}`, data || '');
     }
 
     private async makeRequest(endpoint: string, data: any): Promise<any> {
-        const response = await fetch(`${this.apiUrl}${endpoint}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiKey}`
-            },
-            body: JSON.stringify(data)
-        });
+        this.log(`Making request to ${endpoint}`, data);
+        
+        try {
+            const response = await fetch(`${this.apiUrl}${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.apiKey}`
+                },
+                body: JSON.stringify(data)
+            });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Request failed');
+            this.log(`Response status: ${response.status}`);
+            const responseData = await response.json();
+            this.log(`Response data:`, responseData);
+
+            if (!response.ok) {
+                throw new Error(responseData.error || 'Request failed');
+            }
+
+            return responseData;
+        } catch (error) {
+            this.log(`Request failed:`, error);
+            throw error;
         }
-
-        return response.json();
     }
 
     async initUser(userData: UserData): Promise<string> {
-        const response = await this.makeRequest('/track/user', userData);
-        if (response.success) {
-            this.userId = response.user_id;
-            this.startSession();
-            return response.user_id;
+        this.log('Initializing user with data:', userData);
+        
+        try {
+            const response = await this.makeRequest('/track/user', {
+                email: userData.email,
+                planType: userData.planType,
+                status: userData.status || 'active'
+            });
+
+            this.log('User initialization response:', response);
+
+            if (response.success && response.user_id) {
+                this.userId = response.user_id;
+                this.userEmail = userData.email;
+                this.planType = userData.planType;
+                this.log('User successfully initialized', {
+                    userId: this.userId,
+                    email: this.userEmail,
+                    planType: this.planType
+                });
+                return response.user_id;
+            }
+            throw new Error('Failed to initialize user');
+        } catch (error) {
+            this.log('Error initializing user:', error);
+            throw error;
         }
-        throw new Error('Failed to initialize user');
     }
 
-    async trackFeatureUsage(featureName: string, metadata?: Record<string, any>): Promise<void> {
+    async updateUserStatus(status: 'active' | 'inactive'): Promise<void> {
+        if (!this.userId || !this.userEmail || !this.planType) {
+            throw new Error('User not initialized');
+        }
+
+        await this.makeRequest('/track/user', {
+            email: this.userEmail,
+            planType: this.planType,
+            status: status,
+            user_id: this.userId
+        });
+    }
+
+    async trackFeature(featureName: string): Promise<void> {
         if (!this.userId) {
-            throw new Error('User not initialized! Call initUser first');
+            throw new Error('User not initialized');
         }
 
         await this.makeRequest('/track/feature', {
             user_id: this.userId,
-            feature_name: featureName,
-            metadata
+            feature_name: featureName
+        });
+    }
+
+    async trackSession(duration: number): Promise<void> {
+        if (!this.userId) {
+            throw new Error('User not initialized');
+        }
+
+        await this.makeRequest('/track/session', {
+            user_id: this.userId,
+            duration: duration
         });
     }
 
     startSession(): void {
-        this.sessionStartTime = Date.now();
+        this.sessionStart = Date.now();
     }
 
-    async endSession(lastActivePage?: string): Promise<void> {
-        if (!this.userId || !this.sessionStartTime) {
-            return;
-        }
-
-        const duration = Math.floor((Date.now() - this.sessionStartTime) / 1000);
-        await this.makeRequest('/track/session', {
-            user_id: this.userId,
-            duration,
-            last_active_page: lastActivePage
-        });
-
-        this.sessionStartTime = null;
+    async endSession(): Promise<void> {
+        if (!this.sessionStart || !this.userId) return;
+        
+        const duration = Math.floor((Date.now() - this.sessionStart) / 1000);
+        await this.trackSession(duration);
+        this.sessionStart = null;
     }
 
-    async updateUserStatus(status: 'active' | 'inactive'): Promise<void> {
-        if (!this.userId) {
-            throw new Error('User not initialized! Call initUser first');
-        }
-
-        await this.makeRequest('/track/user', {
-            user_id: this.userId,
-            status
-        });
+    getUserId(): string | null {
+        return this.userId;
     }
 
-    // Helper method to track page visits
-    async trackPageVisit(pageName: string): Promise<void> {
-        if (!this.userId) {
-            throw new Error('User not initialized! Call initUser first');
-        }
-
-        await this.trackFeatureUsage(`page_visit_${pageName}`, {
-            type: 'page_visit',
-            page: pageName,
-            timestamp: new Date().toISOString()
-        });
+    isInitialized(): boolean {
+        return Boolean(this.userId && this.userEmail && this.planType);
     }
 }
+
+export default ChurnTracker;
