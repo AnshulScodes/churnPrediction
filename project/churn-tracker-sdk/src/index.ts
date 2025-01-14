@@ -24,7 +24,7 @@ export class ChurnTracker {
     private sessionStart: number | null = null;
 
     constructor(config: { apiUrl?: string; apiKey: string }) {
-        this.apiUrl = config.apiUrl || 'http://localhost:3000';
+        this.apiUrl = config.apiUrl || 'https://churn-prediction-nine.vercel.app/';
         this.apiKey = config.apiKey;
     }
 

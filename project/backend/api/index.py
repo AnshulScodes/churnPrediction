@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import json
 import os
@@ -9,7 +9,35 @@ from dotenv import load_dotenv
 
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
+
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://churn-prediction-nine.vercel.app",
+            "*"  # Allow all origins in production
+        ],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Origin"],
+        "expose_headers": ["Content-Type", "Authorization", "Origin"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }
+})
+
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin', '*')
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.status_code = 200
+    
+    response.headers.add('Access-Control-Allow-Origin', origin)
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Origin')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 # Initialize Supabase
 supabase = create_client(
