@@ -31,6 +31,7 @@ def after_request(response):
 @app.route('/track/user', methods=['OPTIONS'])
 @app.route('/track/feature', methods=['OPTIONS'])
 @app.route('/track/session', methods=['OPTIONS'])
+@cross_origin(origins='*')
 def handle_preflight():
     response = make_response()
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -56,6 +57,7 @@ def health_check():
     return jsonify({"status": "healthy"})
 
 @app.route('/track/user', methods=['POST', 'OPTIONS'])
+@cross_origin(origins='*')
 def track_user():
     print("\n=== Track User Request ===")
     if request.method == 'OPTIONS':
@@ -139,6 +141,7 @@ def track_user():
         return jsonify({'error': str(e)}), 500
     
 @app.route('/track/feature', methods=['POST', 'OPTIONS'])
+@cross_origin(origins='*')
 def track_feature():
     if request.method == 'OPTIONS':
         return '', 200
@@ -189,6 +192,7 @@ def track_feature():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/track/session', methods=['POST', 'OPTIONS'])
+@cross_origin(origins='*')
 def track_session():
     if request.method == 'OPTIONS':
         return '', 200
