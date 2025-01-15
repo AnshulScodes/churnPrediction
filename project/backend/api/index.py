@@ -28,17 +28,20 @@ CORS(app, resources={
 
 @app.after_request
 def after_request(response):
-    origin = request.headers.get('Origin', '*')
-    if request.method == 'OPTIONS':
-        response = make_response()
-        response.status_code = 200
-    
-    response.headers.add('Access-Control-Allow-Origin', origin)
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Origin')
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
+@app.route('/track/user', methods=['OPTIONS'])
+@app.route('/track/feature', methods=['OPTIONS'])
+@app.route('/track/session', methods=['OPTIONS'])
+def handle_preflight():
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 # Initialize Supabase
 supabase = create_client(
     os.environ.get("SUPABASE_URL", ""),
