@@ -16,6 +16,8 @@ CORS(app, resources={
             "http://localhost:5173",
             "http://localhost:3000",
             "https://churn-prediction-nine.vercel.app",
+            "https://churn-prediction-anshulscodes-projects.vercel.app/"
+            "https://churn-prediction-git-main-anshulscodes-projects.vercel.app/"
             "*"  # Allow all origins in production
         ]
     }
