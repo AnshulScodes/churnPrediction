@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, make_response
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 import json
 import os
 from supabase import create_client
@@ -17,12 +17,7 @@ CORS(app, resources={
             "http://localhost:3000",
             "https://churn-prediction-nine.vercel.app",
             "*"  # Allow all origins in production
-        ],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Origin"],
-        "expose_headers": ["Content-Type", "Authorization", "Origin"],
-        "supports_credentials": True,
-        "max_age": 3600
+        ]
     }
 })
 
@@ -56,6 +51,7 @@ def verify_api_key(auth_header):
     return bool(result.data)
 
 @app.route('/health', methods=['GET'])
+@cross_origin(origins='*')
 def health_check():
     return jsonify({"status": "healthy"})
 
