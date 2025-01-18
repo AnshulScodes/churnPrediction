@@ -23,28 +23,17 @@ CORS(app, resources={
     }
 })
 
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-
-@app.route('/track/user', methods=['OPTIONS'])
-@app.route('/track/feature', methods=['OPTIONS'])
-@app.route('/track/session', methods=['OPTIONS'])
-@cross_origin(origins='*')
-def handle_preflight():
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
 # Initialize Supabase
 supabase = create_client(
     os.environ.get("SUPABASE_URL", ""),
     os.environ.get("SUPABASE_KEY", "")
 )
+
+@app.route('/track/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
+def track(path):
+    if request.method == 'OPTIONS':
+        return jsonify({'message': 'Preflight OK'}), 204
+    return jsonify({'message': f'Tracking {path}'})
 
 def verify_api_key(auth_header):
     if not auth_header.startswith('Bearer '):
